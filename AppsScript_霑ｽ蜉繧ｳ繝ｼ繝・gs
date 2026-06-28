@@ -1,0 +1,91 @@
+/**
+ * ============================================================
+ * Apps Script 追加コード（セバスのデモ生成用）
+ * ============================================================
+ *
+ * これは既存の Apps Script（doPost）に「追記」するコードです。
+ * 既存の doPost を下記の新しい doPost に置き換えてください。
+ *
+ * 【前提：案件管理シートの列】
+ *  A:登録日 B:店名 C:エリア D:電話 E:カテゴリ F:優先度 G:ステータス
+ *  H:営業文ドラフト I:デモサイトURL J:担当メモ K:売上金額 L:入金情報
+ *  M:デモ依頼   ← この列を新しく追加してください（M1に「デモ依頼」と入力）
+ *
+ * 【使い方】
+ *  - Kk が対象店の M列に「依頼」と入力する
+ *  - セバス（GitHub Actions）が getDemoRequests で「依頼」の店を取得
+ *  - 生成完了後、markDemoDone で I列にURL記入・M列を「完成」に更新
+ * ============================================================
+ */
+
+function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+
+  // ===== セバス：デモ依頼の取得 =====
+  if (data.action === "getDemoRequests") {
+    return getDemoRequests(data.sheet);
+  }
+
+  // ===== セバス：デモ完成の記録 =====
+  if (data.action === "markDemoDone") {
+    return markDemoDone(data.sheet, data.row, data.url);
+  }
+
+  // ===== 既存：行の追加（Scout など） =====
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(data.sheet);
+  if (!sheet) return ContentService.createTextOutput("Sheet not found");
+
+  if (data.sheet === "案件管理" && data.dedupe) {
+    var values = sheet.getDataRange().getValues();
+    for (var i = 1; i < values.length; i++) {
+      if (values[i][1] === data.dedupe.name && values[i][2] === data.dedupe.area) {
+        return ContentService.createTextOutput("DUPLICATE");
+      }
+    }
+  }
+  sheet.appendRow(data.row);
+  return ContentService.createTextOutput("OK");
+}
+
+/**
+ * 「デモ依頼」列が「依頼」になっている店舗を返す（JSON配列）
+ * 列インデックス（0始まり）: B店名=1 Cエリア=2 D電話=3 Eカテゴリ=4 IデモURL=8 Mデモ依頼=12
+ */
+function getDemoRequests(sheetName) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+
+  var values = sheet.getDataRange().getValues();
+  var out = [];
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var demoFlag = (row[12] || "").toString().trim();  // M列 デモ依頼
+    var demoUrl = (row[8] || "").toString().trim();     // I列 デモURL
+    // 「依頼」かつ まだURLが無い（=未生成）店だけを対象にする
+    if (demoFlag === "依頼" && demoUrl === "") {
+      out.push({
+        row: i + 1,                       // スプレッドシートの実際の行番号
+        name: (row[1] || "").toString(),  // B 店名
+        area: (row[2] || "").toString(),  // C エリア
+        phone: (row[3] || "").toString(), // D 電話
+        category: (row[4] || "").toString(), // E カテゴリ
+        address: "",                      // 住所はシートに無ければ空
+        hours: "",
+        closed: ""
+      });
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify(out))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * デモ完成を記録：I列（デモURL）にURL、M列（デモ依頼）を「完成」に更新
+ */
+function markDemoDone(sheetName, row, url) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) return ContentService.createTextOutput("Sheet not found");
+  sheet.getRange(row, 9).setValue(url);       // I列 = 9番目
+  sheet.getRange(row, 13).setValue("完成");   // M列 = 13番目
+  return ContentService.createTextOutput("DONE");
+}
