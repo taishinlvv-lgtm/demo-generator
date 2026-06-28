@@ -1,37 +1,32 @@
-﻿name: Demo Generator
+name: セバス デモ生成
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 1 * * *"
-
-permissions:
-  contents: write
+    - cron: '0 * * * *'
 
 jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: "20"
-      - name: Generate demos
+          node-version: '18'
+
+      - name: Run generator
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_SHEET_URL: ${{ secrets.GOOGLE_SHEET_URL }}
           PAGES_BASE_URL: ${{ secrets.PAGES_BASE_URL }}
         run: node src/index.js
-      - name: Commit generated demos
+
+      - name: Commit and push
         run: |
-          git config user.name "sebas-bot"
-          git config user.email "sebas@xmousytime.local"
+          git config user.email "sebas@xmousytime.com"
+          git config user.name "Sebas"
           git add docs/
-          if git diff --staged --quiet; then
-            echo "no changes"
-          else
-            git commit -m "sebas demo $(Get-Date -Format yyyy-MM-dd)"
-            git push
-          fi
+          git diff --staged --quiet || git commit -m "デモ生成"
+          git push
